@@ -72,6 +72,19 @@ npm run build
 
 This outputs the static client bundle to `dist/`. You can serve it with Vite preview (`npm run preview`), or host it behind any static server. Ensure the Express server (or a compatible backend) is running so the client can reach `/api/chat`.
 
+### Running the Minified Build with Express
+
+To serve the packed bundle straight from the Express server:
+
+```bash
+npm run build
+NODE_ENV=production npm start
+```
+
+- `npm run build` compiles and minifies the React app into `dist/`.
+- Starting the server with `NODE_ENV=production` (or setting `SERVE_STATIC=true`) makes Express serve those static files while keeping the `/api/chat` proxy live.
+- Open `http://localhost:3001` to use the production build.
+
 ## Security Considerations
 
 - HTML replies render in a remote, sandboxed document without DOM access to the parent page.

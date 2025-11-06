@@ -2,6 +2,11 @@ import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import OpenAI from 'openai';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientBuildDir = path.resolve(__dirname, '..', 'dist');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -48,15 +53,10 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const systemMessage = {
-      role: 'system',
-      content: 'When the user asks you to create an HTML page or web page, respond with ONLY the raw HTML code. Do not wrap it in markdown code blocks or backticks. Start your response directly with <!DOCTYPE html> or the opening HTML tag.'
-    };
-
     const completion = await openai.chat.completions.create({
       model,
       stream: true,
-      messages: [systemMessage, ...messages]
+      messages
     });
 
     for await (const chunk of completion) {
@@ -83,6 +83,23 @@ app.post('/api/chat', async (req, res) => {
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+if (process.env.NODE_ENV === 'production' || process.env.SERVE_STATIC === 'true') {
+  app.use(express.static(clientBuildDir));
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      next();
+      return;
+    }
+
+    res.sendFile(path.resolve(clientBuildDir, 'index.html'), (error) => {
+      if (error) {
+        next(error);
+      }
+    });
+  });
+}
 
 const server = createServer(app);
 
