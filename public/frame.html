@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTML Preview Frame</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // Listen for messages from parent window
+      window.addEventListener("message", (e) => {
+        console.log("Iframe received message:", e.data);
+        
+        // The parent will send us an object with html property
+        if (typeof e.data === "object" && e.data !== null && e.data.html) {
+          console.log("Received HTML content from parent:", e.data.html.substring(0, 100) + "...");
+          // Write the HTML content to the document
+          document.open();
+          document.write(e.data.html);
+          document.close();
+        } else {
+          console.log("Invalid message format, expected { html: '...' }");
+        }
+      });
+
+      // Signal to parent that we're ready to receive content
+      document.addEventListener("DOMContentLoaded", () => {
+        console.log("Frame ready, sending ready message to parent");
+        window.parent.postMessage({ message: "ready" }, "*");
+      });
+    </script>
+  </body>
+</html>
+
