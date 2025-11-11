@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChatSidebar from './components/ChatSidebar.jsx';
 import ChatWindow from './components/ChatWindow.jsx';
+import {
+  DEEP_LINK_QUERY_PARAM,
+  decodeDeepLinkValue,
+  extractDeepLinkQuery
+} from './utils/query.js';
 
 const STORAGE_KEY = 'llm-chatbot-chats';
 
@@ -45,6 +50,7 @@ function App() {
   const [storageReady, setStorageReady] = useState(false);
   const [pendingQuery, setPendingQuery] = useState(null);
   const abortControllerRef = useRef(null);
+  const queryHandledRef = useRef(false);
 
   const activeChat = useMemo(
     () => chats.find((chat) => chat.id === activeChatId) ?? chats[0],
@@ -55,6 +61,17 @@ function App() {
     setActiveChatId(chatId);
     setInputValue('');
     setError(null);
+  }, []);
+
+  const handleClearChats = useCallback(() => {
+    abortControllerRef.current?.abort();
+    const freshChat = createEmptyChat();
+    setChats([freshChat]);
+    setActiveChatId(freshChat.id);
+    setInputValue('');
+    setError(null);
+    setIsStreaming(false);
+    setPendingQuery(null);
   }, []);
 
   const handleNewChat = useCallback(() => {
@@ -317,14 +334,14 @@ function App() {
       return;
     }
 
-    let initialChats = [];
+    let restoredChats = [];
 
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          initialChats = parsed
+          restoredChats = parsed
             .map((chat) => {
               if (!chat || typeof chat.id !== 'string' || !Array.isArray(chat.messages)) {
                 return null;
@@ -367,12 +384,11 @@ function App() {
       console.warn('Failed to restore chats from storage', storageError);
     }
 
-    if (initialChats.length === 0) {
-      initialChats = [createEmptyChat()];
-    }
+    const startupChat = createEmptyChat();
+    const hydratedChats = [...restoredChats, startupChat];
 
-    setChats(initialChats);
-    setActiveChatId(initialChats[0]?.id ?? '');
+    setChats(hydratedChats);
+    setActiveChatId(startupChat.id);
     setStorageReady(true);
   }, []);
 
@@ -401,52 +417,62 @@ function App() {
   }, [chats, storageReady]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (
+      typeof window === 'undefined' ||
+      !storageReady ||
+      queryHandledRef.current
+    ) {
       return;
     }
 
     const url = new URL(window.location.href);
-    const qParam = url.searchParams.get('q');
-    if (!qParam) {
+    const extracted = extractDeepLinkQuery(url.search, DEEP_LINK_QUERY_PARAM);
+
+    if (!extracted) {
+      queryHandledRef.current = true;
       return;
     }
 
-    let decodedQuery = qParam;
-    try {
-      decodedQuery = decodeURIComponent(qParam);
-    } catch {
-      decodedQuery = qParam;
-    }
-    decodedQuery = decodedQuery.replace(/\+/g, ' ');
+    const decodedQuery = decodeDeepLinkValue(extracted.rawValue).trim();
 
-    if (!decodedQuery.trim()) {
-      url.searchParams.delete('q');
+    if (!decodedQuery) {
+      if (extracted.mode === 'param') {
+        url.searchParams.delete(DEEP_LINK_QUERY_PARAM);
+      } else {
+        url.search = '';
+      }
       const updatedSearch = url.searchParams.toString();
       const nextUrl = `${url.pathname}${updatedSearch ? `?${updatedSearch}` : ''}${url.hash}`;
       window.history.replaceState(null, '', nextUrl);
+      queryHandledRef.current = true;
       return;
     }
 
-    const newChat = createEmptyChat();
+    const emptyActiveChat =
+      chats.find((chat) => chat.id === activeChatId && chat.messages.length === 0) ??
+      chats.find((chat) => chat.messages.length === 0);
 
-    setChats((prevChats) => {
-      if (prevChats.length === 0) {
-        return [newChat];
-      }
-      if (prevChats.length === 1 && prevChats[0].messages.length === 0) {
-        return [newChat];
-      }
-      return [...prevChats, newChat];
-    });
+    let targetChatId = emptyActiveChat?.id;
 
-    setActiveChatId(newChat.id);
-    setPendingQuery({ chatId: newChat.id, message: decodedQuery });
+    if (!targetChatId) {
+      const newChat = createEmptyChat();
+      targetChatId = newChat.id;
+      setChats((prevChats) => [...prevChats, newChat]);
+    }
 
-    url.searchParams.delete('q');
+    setActiveChatId(targetChatId);
+    setPendingQuery({ chatId: targetChatId, message: decodedQuery });
+
+    if (extracted.mode === 'param') {
+      url.searchParams.delete(DEEP_LINK_QUERY_PARAM);
+    } else {
+      url.search = '';
+    }
     const updatedSearch = url.searchParams.toString();
     const nextUrl = `${url.pathname}${updatedSearch ? `?${updatedSearch}` : ''}${url.hash}`;
     window.history.replaceState(null, '', nextUrl);
-  }, []);
+    queryHandledRef.current = true;
+  }, [storageReady, chats, activeChatId]);
 
   useEffect(() => {
     if (!pendingQuery) {
@@ -473,6 +499,7 @@ function App() {
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
+        onClearChats={handleClearChats}
       />
       <ChatWindow
         messages={activeChat?.messages ?? []}

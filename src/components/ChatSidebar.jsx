@@ -1,6 +1,13 @@
 import PropTypes from 'prop-types';
 
-function ChatSidebar({ chats, activeChatId, onSelectChat, onNewChat, disabled }) {
+function ChatSidebar({
+  chats,
+  activeChatId,
+  onSelectChat,
+  onNewChat,
+  onClearChats,
+  disabled
+}) {
   return (
     <aside className="sidebar">
       <header className="sidebar-header">
@@ -10,6 +17,14 @@ function ChatSidebar({ chats, activeChatId, onSelectChat, onNewChat, disabled })
       <div className="sidebar-actions">
         <button type="button" className="new-chat-btn" onClick={onNewChat} disabled={disabled}>
           New Chat
+        </button>
+        <button
+          type="button"
+          className="clear-chats-btn"
+          onClick={onClearChats}
+          disabled={disabled}
+        >
+          Clear History
         </button>
       </div>
       <nav className="chat-list">
@@ -52,6 +67,7 @@ ChatSidebar.propTypes = {
   activeChatId: PropTypes.string.isRequired,
   onSelectChat: PropTypes.func.isRequired,
   onNewChat: PropTypes.func.isRequired,
+  onClearChats: PropTypes.func.isRequired,
   disabled: PropTypes.bool
 };
 
