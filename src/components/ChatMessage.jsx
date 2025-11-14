@@ -66,7 +66,7 @@ function HtmlMessage({ content }) {
       <iframe
         ref={iframeRef}
         title="AI generated HTML"
-        src="/frame.html"
+        src="https://xssdoctor.com/frame.html"
         sandbox="allow-same-origin allow-scripts"
       />
     </div>
